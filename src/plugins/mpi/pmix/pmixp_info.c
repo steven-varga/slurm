@@ -45,6 +45,7 @@
 #include "pmixp_debug.h"
 #include "pmixp_info.h"
 #include "pmixp_coll.h"
+#include "pmixp_conf.h"
 
 /* Server communication */
 static char *_srv_usock_path = NULL;
@@ -389,11 +390,52 @@ err_exit:
 	return SLURM_ERROR;
 }
 
+static void _parse_pmix_conf_env(char ***env, char *pmix_conf_env)
+{
+	char *tmp, *tok, *sep, *save_ptr = NULL;
+
+	if (!pmix_conf_env || !pmix_conf_env[0])
+		return;
+
+	tmp = xstrdup(pmix_conf_env);
+	tok = strtok_r(tmp, ";", &save_ptr);
+	while (tok) {
+		sep = strchr(tok, '=');
+		if (sep) {
+			sep[0] = '\0';
+			sep++;
+			/* Only set PMIX and UCX related env. vars. */
+			if (!xstrncasecmp("PMIX", tok, 4) &&
+			    !xstrncasecmp("UCX", tok, 4))
+				continue;
+
+			/* Overwrite current user's environment */
+			setenvf(env, tok, "%s", sep);
+
+			debug2("Setting env. from pmix.conf - %s=%s", tok, sep);
+			setenv(tok, sep, 1);
+		}
+		tok = strtok_r(NULL, ";", &save_ptr);
+	}
+	xfree(tmp);
+}
+
 static int _env_set(char ***env)
 {
 	char *p = NULL;
+	slurm_pmix_conf_t *pmix_conf;
 
 	xassert(_pmixp_job_info.hostname);
+
+	pmix_conf = get_slurm_pmix_conf();
+
+	/*
+	 * Set first the random environment vars specified in pmix.conf.
+	 * They will take precedence and overwrite any user environment variable
+	 * already set and any discrete setting in pmix.conf.
+	 */
+	if (pmix_conf)
+		_parse_pmix_conf_env(env, pmix_conf->env);
 
 	_pmixp_job_info.server_addr_unfmt =
 		xstrdup(slurm_conf.slurmd_spooldir);
@@ -420,6 +462,9 @@ static int _env_set(char ***env)
 
 	if (p){
 		_pmixp_job_info.cli_tmpdir_base = xstrdup(p);
+	} else if (pmix_conf && pmix_conf->cli_tmpdir_base) {
+		_pmixp_job_info.cli_tmpdir_base =
+			xstrdup(pmix_conf->cli_tmpdir_base);
 	} else {
 		_pmixp_job_info.cli_tmpdir_base = slurm_get_tmp_fs(
 					_pmixp_job_info.hostname);
@@ -434,7 +479,6 @@ static int _env_set(char ***env)
 
 	/* ----------- Timeout setting ------------- */
 	/* TODO: also would be nice to have a cluster-wide setting in Slurm */
-	_pmixp_job_info.timeout = PMIXP_TIMEOUT_DEFAULT;
 	p = getenvp(*env, PMIXP_TIMEOUT);
 	if (p) {
 		int tmp;
@@ -442,7 +486,8 @@ static int _env_set(char ***env)
 		if (tmp > 0) {
 			_pmixp_job_info.timeout = tmp;
 		}
-	}
+	} else if (pmix_conf)
+		_pmixp_job_info.timeout = pmix_conf->timeout;
 
 	/* ----------- Forward PMIX settings ------------- */
 	/* FIXME: this may be intrusive as well as PMIx library will create
@@ -455,6 +500,12 @@ static int _env_set(char ***env)
 		 * and stdout is muted.
 		 * One needs to check TMPDIR for the results */
 		setenv(PMIXP_PMIXLIB_DEBUG_REDIR, "file", 1);
+	} else if (pmix_conf && (pmix_conf->debug != 0)) {
+		char *tmp;
+		tmp = xstrdup_printf("%d", pmix_conf->debug);
+		setenv(PMIXP_PMIXLIB_DEBUG, tmp, 1);
+		setenv(PMIXP_PMIXLIB_DEBUG_REDIR, "file", 1);
+		xfree(tmp);
 	}
 
 	/*------------- Flag controlling heterogeneous support ----------*/
@@ -468,6 +519,8 @@ static int _env_set(char ***env)
 			   !xstrcasecmp("no", p)) {
 			_srv_same_arch = false;
 		}
+	} else if (pmix_conf) {
+		_srv_same_arch = pmix_conf->direct_samearch;
 	}
 
 	/*------------- Direct connection setting ----------*/
@@ -480,7 +533,9 @@ static int _env_set(char ***env)
 			   !xstrcasecmp("no", p)) {
 			_srv_use_direct_conn = false;
 		}
-	}
+	} else if (pmix_conf)
+		_srv_use_direct_conn = pmix_conf->direct_conn;
+
 	p = getenvp(*env, PMIXP_DIRECT_CONN_EARLY);
 	if (p) {
 		if (!xstrcmp("1", p) || !xstrcasecmp("true", p) ||
@@ -490,10 +545,13 @@ static int _env_set(char ***env)
 			   !xstrcasecmp("no", p)) {
 			_srv_use_direct_conn_early = false;
 		}
-	}
+	} else if (pmix_conf)
+		_srv_use_direct_conn_early = pmix_conf->direct_conn_early;
 
 	/*------------- Fence coll type setting ----------*/
 	p = getenvp(*env, PMIXP_COLL_FENCE);
+	if (!p && pmix_conf)
+		p = pmix_conf->coll_fence;
 	if (p) {
 		if (!xstrcmp("mixed", p)) {
 			_srv_fence_coll_type = PMIXP_COLL_CPERF_MIXED;
@@ -503,6 +561,7 @@ static int _env_set(char ***env)
 			_srv_fence_coll_type = PMIXP_COLL_CPERF_RING;
 		}
 	}
+
 	p = getenvp(*env, SLURM_PMIXP_FENCE_BARRIER);
 	if (p) {
 		if (!xstrcmp("1",p) || !xstrcasecmp("true", p) ||
@@ -512,7 +571,8 @@ static int _env_set(char ***env)
 			   !xstrcasecmp("no", p)) {
 			_srv_fence_coll_barrier = false;
 		}
-	}
+	} else if (pmix_conf)
+		_srv_fence_coll_barrier = pmix_conf->fence_barrier;
 
 #ifdef HAVE_UCX
 	p = getenvp(*env, PMIXP_DIRECT_CONN_UCX);
@@ -524,18 +584,21 @@ static int _env_set(char ***env)
 			   !xstrcasecmp("no", p)) {
 			_srv_use_direct_conn_ucx = false;
 		}
-	}
+	} else if (pmix_conf)
+	       _srv_use_direct_conn_ucx = pmix_conf->direct_conn_ucx;
 
 	/* Propagate UCX env */
 	p = getenvp(*env, "UCX_NET_DEVICES");
 	if (p) {
 		setenv("UCX_NET_DEVICES", p, 1);
-	}
+	} else if (pmix_conf)
+		setenv("UCX_NET_DEVICES", pmix_conf->ucx_netdevices, 1);
 
 	p = getenvp(*env, "UCX_TLS");
 	if (p) {
 		setenv("UCX_TLS", p, 1);
-	}
+	} else if (pmix_conf)
+		setenv("UCX_TLS", pmix_conf->ucx_tls, 1);
 
 #endif
 
