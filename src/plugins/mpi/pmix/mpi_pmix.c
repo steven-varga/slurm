@@ -51,6 +51,7 @@
 #include "pmixp_info.h"
 #include "pmixp_dconn_ucx.h"
 #include "pmixp_client.h"
+#include "pmixp_conf.h"
 
 /*
  * These variables are required by the generic plugin interface.  If they
@@ -149,6 +150,7 @@ extern int fini(void)
 	pmixp_agent_stop();
 	pmixp_stepd_finalize();
 	_libpmix_close(libpmix_plug);
+	free_pmix_conf();
 	return SLURM_SUCCESS;
 }
 
