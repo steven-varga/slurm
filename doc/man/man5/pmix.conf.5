@@ -1,0 +1,177 @@
+.TH "pmix.conf" "5" "Slurm's PMIx Configuration File" "March 2021" "Slurm's PMIx Configuration File"
+
+.SH "NAME"
+pmix.conf \- Slurm's PMIx configuration file for the mpi/pmix plugin.
+
+.SH "DESCRIPTION"
+
+\fBpmix.conf\fP is an ASCII file which defines parameters used by
+Slurm's PMIx plugin.
+The file location can be modified at system build time using the
+DEFAULT_SLURM_CONF parameter or at execution time by setting the SLURM_CONF
+environment variable. The file will always be located in the
+same directory as the \fBslurm.conf\fP file.
+.LP
+Parameter names are case insensitive.
+Any text following a "#" in the configuration file is treated
+as a comment through the end of that line.
+Changes to the configuration file take effect immediately when a new step is
+launched and performs PMIx initialization.
+
+.LP
+The following pmix.conf parameters are defined to control the general
+behavior of PMIx plugin in Slurm. If Slurm is compiled with UCX support, the
+PMIx plugin can setup UCX from the settings defined in this file.
+
+.LP
+There are three ways for setting up PMIx or UCX parameters in Slurm. The first
+one is from the user environment, setting specific SLURM_PMIX_* variables before
+launching the srun command. The second and recommended one is to configure
+pmix.conf with the settings described below. The third method is to make use of
+"PMIxEnv" parameter in pmix.conf which will overwrite any of the other methods.
+See below for its particular description.
+
+.TP
+\fBPMIxTimeout\fR=<number>\fR
+Setup communication timeout.
+.br
+Equivalent user environment variable is SLURM_PMIX_TIMEOUT.
+.br
+Default is 300.
+
+.TP
+\fBPMIxDebug\fR=<number>\fR
+This parameter parameter will be propagated to server-side part of libPMIx.
+.br
+Equivalent user environment variable is PMIX_DEBUG.
+.br
+Default is 0.
+
+.TP
+\fBPMIxDirectSameArch\fR=<yes|no>
+If set to "yes", ...
+.br
+Equivalent user environment variable is SLURM_PMIX_SAMEARCH.
+.br
+Default is "no".
+
+.TP
+\fBPMIxDirectConn\fR=<yes|no>
+If set to "yes", ...
+.br
+Equivalent user environment variable is SLURM_PMIX_DIRECT_CONN.
+.br
+Default is "no".
+
+.TP
+\fBPMIxDirectConnEarly\fR=<yes|no>
+If set to "yes", ...
+.br
+Equivalent user environment variable is SLURM_PMIX_DIRECT_CONN_EARLY.
+.br
+Default is "no".
+
+.TP
+\fBPMIxDirectConnUCX\fR=<yes|no>
+If set to "yes", ...
+.br
+Equivalent user environment variable is SLURM_PMIX_DIRECT_CONN_UCX.
+.br
+Default is "no".
+
+.TP
+\fBPMIxFenceBarrier\fR=<yes|no>
+If set to "yes", ...
+.br
+Equivalent user environment variable is SLURM_PMIX_FENCE_BARRIER.
+.br
+Default is "no".
+
+.TP
+\fBPMIxCliTmpDirBase\fR=\fI<path>\fR
+Specify TmpDirPath.
+.br
+Equivalent user environment variable is SLURM_PMIX_TMPDIR.
+.br
+Default is TmpFS from slurm.conf.
+
+.TP
+\fBPMIxCollFence\fR=\fI<string>\fR
+Specify CollFence.
+.br
+Equivalent user environment variable is SLURM_PMIX_FENCE.
+.br
+Unset empty string is the default.
+
+.TP
+\fBPMIxNetDevicesUCX\fR=\fI<string>\fR
+Specify NetDevices for UCX.
+.br
+Equivalent user environment variable is UCX_NET_DEVICES.
+.br
+Unset empty string is the default.
+
+.TP
+\fBPMIxTlsUCX\fR=\fI<string>\fR
+Specify TLS for UCX.
+.br
+Equivalent user environment variable is UCX_TLS.
+.br
+Unset empty string is the default.
+
+.TP
+\fBPMIxEnv\fR="<\fIkey\fR=\fIvalue\fR>[;<\fIkey\fR=\fIvalue\fR>]"
+This parameter allows an admin to define any key-value pair to set any
+environment variable when initializing PMIx or UCX. This can be useful for
+example to setup any of the variables shown by 'ucx_info -c'. Keys defined here
+must start with "UCX" or "PMIX". Any other keys will be ignored. For example a
+valid setting could be PMIxEnv="UCX_UNIFIED_MODE=1;PMIX_DEBUG=1". Multiple
+key-value pairs must be separated by a semicolon ';' and the parameter must be
+enclosed between double quotes.
+.br
+Unset empty string is the default.
+
+.SH "EXAMPLE"
+.TP
+\fB/etc/slurm/pmix.conf\fR:
+
+.nf
+###
+# Sample pmix.conf file
+###
+.fi
+
+.nf
+PMIxTimeout=350
+PMIxDebug=1
+PMIxFenceBarrier=yes
+PMIxEnv="UCX_UNIFIED_MODE=1;UCX_LOG_BUFFER=2k"
+.fi
+
+.SH "NOTES"
+.LP
+Changing any parameters in pmix.conf while slurm is running will cause new jobs
+to initialize PMI with these new parameters and therefore slurmd does not need
+a restart. When a new step is launched for a running job, the step will inherit
+the parameters from the parent stepd.
+
+.SH "COPYING"
+.br
+Copyright (C) 2010\-2021 SchedMD LLC.
+.LP
+This file is part of Slurm, a resource management program.
+For details, see <https://slurm.schedmd.com/>.
+.LP
+Slurm is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 2 of the License, or (at your option)
+any later version.
+.LP
+Slurm is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details.
+
+.SH "SEE ALSO"
+.LP
+\fBslurm.conf\fR(5)
