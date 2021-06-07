@@ -211,6 +211,7 @@ static int  _job_create(job_desc_msg_t * job_specs, int allocate, int will_run,
 			bool cron, job_record_t **job_rec_ptr, uid_t submit_uid,
 			char **err_msg, uint16_t protocol_version);
 static void _job_timed_out(job_record_t *job_ptr, bool preempted);
+static void _job_wait_kill(job_record_t *job_ptr);
 static void _kill_dependent(job_record_t *job_ptr);
 static void _list_delete_job(void *job_entry);
 static int  _list_find_job_old(void *job_entry, void *key);
@@ -5448,8 +5449,7 @@ static int _job_fail(job_record_t *job_ptr, uint32_t job_state)
 		suspended = true;
 	}
 
-	if (IS_JOB_CONFIGURING(job_ptr) || IS_JOB_RUNNING(job_ptr) ||
-	    suspended) {
+	if (IS_JOB_RUNNING(job_ptr) || suspended) {
 		/* No need to signal steps, deallocate kills them */
 		job_ptr->time_last_active       = now;
 		if (suspended) {
@@ -5584,7 +5584,6 @@ extern int job_signal(job_record_t *job_ptr, uint16_t signal,
 		}
 	}
 
-	/* let node select plugin do any state-dependent signaling actions */
 	select_g_job_signal(job_ptr, signal);
 	last_job_update = now;
 
@@ -5619,22 +5618,9 @@ extern int job_signal(job_record_t *job_ptr, uint16_t signal,
 		job_ptr->bit_flags |= JOB_KILL_HURRY;
 
 	if (IS_JOB_CONFIGURING(job_ptr) && (signal == SIGKILL)) {
-		last_job_update         = now;
-		job_ptr->end_time       = now;
-		job_ptr->job_state      = JOB_CANCELLED | JOB_COMPLETING;
-		if (flags & KILL_FED_REQUEUE)
-			job_ptr->job_state |= JOB_REQUEUE;
-		slurmscriptd_flush_job(job_ptr->job_id);
-		track_script_flush_job(job_ptr->job_id);
-		build_cg_bitmap(job_ptr);
-		job_completion_logger(job_ptr, false);
-		deallocate_nodes(job_ptr, false, false, false);
-		if (flags & KILL_FED_REQUEUE) {
-			job_ptr->job_state &= (~JOB_REQUEUE);
-		}
-		verbose("%s: %u of configuring %pJ successful",
-			__func__, signal, job_ptr);
-		return SLURM_SUCCESS;
+		last_job_update = now;
+		job_ptr->job_state |= JOB_WAIT_KILL;
+		return ESLURM_JOB_KILL_CONFIGURING_WAIT;
 	}
 
 	if (IS_JOB_PENDING(job_ptr) && (signal == SIGKILL)) {
@@ -6203,6 +6189,14 @@ static int _job_complete(job_record_t *job_ptr, uid_t uid, bool requeue,
 
 	if (IS_JOB_COMPLETING(job_ptr))
 		return SLURM_SUCCESS;	/* avoid replay */
+
+	if (IS_JOB_CONFIGURING(job_ptr)) {
+		last_job_update = now;
+		debug2("%s: Waiting to kill %pJ after configuring",
+		       __func__, job_ptr);
+		job_ptr->job_state |= JOB_WAIT_KILL;
+		return SLURM_SUCCESS;
+	}
 
 	if ((job_return_code & 0xff) == SIG_OOM) {
 		info("%s: %pJ OOM failure",  __func__, job_ptr);
@@ -9047,6 +9041,11 @@ void job_time_limit(void)
 				if (job_ptr->batch_flag)
 					launch_job(job_ptr);
 			}
+		} else if ((prolog == 0) && !IS_JOB_CONFIGURING(job_ptr) &&
+			   test_job_nodes_ready(job_ptr) &&
+			   IS_JOB_WAIT_KILL(job_ptr)) {
+			info("Killing %pJ now", job_ptr);
+			_job_wait_kill(job_ptr);
 		}
 
 		/*
@@ -9413,6 +9412,24 @@ static void _job_timed_out(job_record_t *job_ptr, bool preempted)
 		build_cg_bitmap(job_ptr);
 		job_completion_logger(job_ptr, false);
 		deallocate_nodes(job_ptr, !preempted, false, preempted);
+	} else
+		job_signal(job_ptr, SIGKILL, 0, 0, false);
+	return;
+}
+
+/* Terminate a job that is JOB_WAIT_KILL */
+static void _job_wait_kill(job_record_t *job_ptr)
+{
+	xassert(job_ptr);
+
+	if (job_ptr->details) {
+		time_t now = time(NULL);
+		job_ptr->end_time = now;
+		job_ptr->time_last_active = now;
+		job_ptr->job_state = JOB_COMPLETING;
+		build_cg_bitmap(job_ptr);
+		job_completion_logger(job_ptr, false);
+		deallocate_nodes(job_ptr, false, false, 0);
 	} else
 		job_signal(job_ptr, SIGKILL, 0, 0, false);
 	return;

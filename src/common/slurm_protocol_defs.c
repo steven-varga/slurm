@@ -2887,6 +2887,8 @@ extern char *job_state_string(uint32_t inx)
 	/* Process JOB_STATE_FLAGS */
 	if (inx & JOB_COMPLETING)
 		return "COMPLETING";
+	if (inx & JOB_WAIT_KILL)
+		return "WAIT_KILL";
 	if (inx & JOB_STAGE_OUT)
 		return "STAGE_OUT";
 	if (inx & JOB_CONFIGURING)
@@ -2946,6 +2948,8 @@ extern char *job_state_string_compact(uint32_t inx)
 	/* Process JOB_STATE_FLAGS */
 	if (inx & JOB_COMPLETING)
 		return "CG";
+	if (inx & JOB_WAIT_KILL)
+		return "WK";
 	if (inx & JOB_STAGE_OUT)
 		return "SO";
 	if (inx & JOB_CONFIGURING)
@@ -3112,6 +3116,8 @@ extern uint32_t job_state_num(const char *state_name)
 
 	if (_job_name_test(JOB_COMPLETING, state_name))
 		return JOB_COMPLETING;
+	if (_job_name_test(JOB_WAIT_KILL, state_name))
+		return JOB_WAIT_KILL;
 	if (_job_name_test(JOB_CONFIGURING, state_name))
 		return JOB_CONFIGURING;
 	if (_job_name_test(JOB_RESIZING, state_name))

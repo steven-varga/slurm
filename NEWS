@@ -162,6 +162,8 @@ documents those changes that are of interest to users and administrators.
  -- scrontab - add ability to update crontab from a file or standard input.
  -- scrontab - add ability to set and expand variables.
  -- Pass JSON of job to node mappings to ResumeProgram.
+ -- Termination of configuring jobs is now delayed to protect nodes from being
+    left in a bad state.
 
 * Changes in Slurm 20.11.9
 ==========================

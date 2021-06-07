@@ -118,6 +118,8 @@
 	(_X->job_state & JOB_SIGNALING)
 #define IS_JOB_STAGE_OUT(_X)		\
 	(_X->job_state & JOB_STAGE_OUT)
+#define IS_JOB_WAIT_KILL(_X)		\
+	(_X->job_state & JOB_WAIT_KILL)
 
 /* Defined node states */
 #define IS_NODE_UNKNOWN(_X)		\

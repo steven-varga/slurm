@@ -493,6 +493,8 @@ _parse_state( char* str, uint32_t* states )
 	xstrcat(state_names, ",");
 	xstrcat(state_names, job_state_string(JOB_COMPLETING));
 	xstrcat(state_names, ",");
+	xstrcat(state_names, job_state_string(JOB_WAIT_KILL));
+	xstrcat(state_names, ",");
 	xstrcat(state_names, job_state_string(JOB_CONFIGURING));
 	xstrcat(state_names, ",");
 	xstrcat(state_names, job_state_string(JOB_RESIZING));
