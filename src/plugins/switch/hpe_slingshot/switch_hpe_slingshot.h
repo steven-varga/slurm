@@ -35,13 +35,12 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA.
 \*****************************************************************************/
 
+#ifndef _SWITCH_HPE_SLINGSHOT_H_
+#define _SWITCH_HPE_SLINGSHOT_H_
+
 #include <stdint.h>
 
-#include <bitstring.h>
-
-// debug/error macros that include function name
-#define SSDEBUG(fmt, ...) debug("slingshot: %s: " fmt, __func__, ##__VA_ARGS__)
-#define SSERROR(fmt, ...) debug("slingshot: %s: " fmt, __func__, ##__VA_ARGS__)
+#include "src/common/bitstring.h"
 
 // Version of the state file
 #define SLINGSHOT_STATE_VERSION 1
@@ -140,6 +139,7 @@ typedef struct pals_comm_profile {
 	char device_name[16];   // NIC device name (e.g. "cxi0")
 } pals_comm_profile_t;
 
+//FIXME: plugin should not have a separate version, should use SLURM_PROTOCOL_VERSION
 // Version of the jobinfo structure
 #define SLINGSHOT_JOBINFO_VERSION 1
 
@@ -182,3 +182,6 @@ extern bool slingshot_open_cxi_lib(void);
 extern bool slingshot_create_services(slingshot_jobinfo_t *job, uint32_t uid,
 	uint16_t step_cpus);
 extern bool slingshot_destroy_services(slingshot_jobinfo_t *job);
+extern void slingshot_free_services(void);
+
+#endif
