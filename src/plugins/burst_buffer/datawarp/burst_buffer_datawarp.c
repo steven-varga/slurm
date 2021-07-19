@@ -4308,8 +4308,8 @@ static void *_start_pre_run(void *x)
 	if (job_ptr)
 		bb_job = _get_bb_job(job_ptr);
 	_log_script_argv(pre_run_args->args, resp_msg);
-	if (!WIFEXITED(status) || (WEXITSTATUS(status) != 0)
-	    || IS_JOB_WAIT_KILL(job_ptr)) {
+	if (!WIFEXITED(status) || (WEXITSTATUS(status) != 0) ||
+	    IS_JOB_WAIT_KILL(job_ptr)) {
 		/* Pre-run failure */
 		trigger_burst_buffer();
 		error("dws_pre_run for %pJ status:%u response:%s",
