@@ -2209,8 +2209,11 @@ static int _batch_launch_defer(queued_request_t *queued_req_ptr)
 	}
 
 	if (nodes_ready) {
-		if (IS_JOB_CONFIGURING(job_ptr))
+		if (IS_JOB_CONFIGURING(job_ptr)) {
+			if (job_wait_kill(job_ptr))
+				return -1;
 			job_config_fini(job_ptr);
+		}
 		queued_req_ptr->last_attempt = (time_t) 0;
 		return 0;
 	}

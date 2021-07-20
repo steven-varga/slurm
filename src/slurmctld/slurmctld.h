@@ -2817,5 +2817,6 @@ extern char **job_common_env_vars(job_record_t *job_ptr, bool is_complete);
  * where that node is represented in that array.
  */
 extern int job_get_node_inx(char *node_name, bitstr_t *node_bitmap);
+extern int job_wait_kill(job_record_t *job_ptr);
 
 #endif /* !_HAVE_SLURMCTLD_H */

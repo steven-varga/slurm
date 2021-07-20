@@ -211,7 +211,6 @@ static int  _job_create(job_desc_msg_t * job_specs, int allocate, int will_run,
 			bool cron, job_record_t **job_rec_ptr, uid_t submit_uid,
 			char **err_msg, uint16_t protocol_version);
 static void _job_timed_out(job_record_t *job_ptr, bool preempted);
-static void _job_wait_kill(job_record_t *job_ptr);
 static void _kill_dependent(job_record_t *job_ptr);
 static void _list_delete_job(void *job_entry);
 static int  _list_find_job_old(void *job_entry, void *key);
@@ -8985,7 +8984,7 @@ void job_time_limit(void)
 		else
 			prolog = 0;
 		if ((prolog == 0) && IS_JOB_CONFIGURING(job_ptr) &&
-		    test_job_nodes_ready(job_ptr)) {
+		    test_job_nodes_ready(job_ptr) && !job_wait_kill(job_ptr)) {
 			info("%s: Configuration for %pJ complete",
 			     __func__, job_ptr);
 			job_config_fini(job_ptr);
@@ -8994,11 +8993,6 @@ void job_time_limit(void)
 				if (job_ptr->batch_flag)
 					launch_job(job_ptr);
 			}
-		} else if ((prolog == 0) && !IS_JOB_CONFIGURING(job_ptr) &&
-			   test_job_nodes_ready(job_ptr) &&
-			   IS_JOB_WAIT_KILL(job_ptr)) {
-			info("Killing %pJ now", job_ptr);
-			_job_wait_kill(job_ptr);
 		}
 
 		/*
@@ -9371,21 +9365,21 @@ static void _job_timed_out(job_record_t *job_ptr, bool preempted)
 }
 
 /* Terminate a job that is JOB_WAIT_KILL */
-static void _job_wait_kill(job_record_t *job_ptr)
+extern int job_wait_kill(job_record_t *job_ptr)
 {
 	xassert(job_ptr);
 
-	if (job_ptr->details) {
-		time_t now = time(NULL);
-		job_ptr->end_time = now;
-		job_ptr->time_last_active = now;
-		job_ptr->job_state = JOB_COMPLETING;
-		build_cg_bitmap(job_ptr);
-		job_completion_logger(job_ptr, false);
-		deallocate_nodes(job_ptr, false, false, 0);
-	} else
-		job_signal(job_ptr, SIGKILL, 0, 0, false);
-	return;
+	if (!IS_JOB_WAIT_KILL(job_ptr))
+		return false;
+
+	info("canceling delay killed job %pJ", job_ptr);
+
+	job_ptr->job_state &= ~JOB_WAIT_KILL;
+	job_ptr->job_state &= ~JOB_CONFIGURING;
+	job_complete(job_ptr->job_id, slurm_conf.slurm_user_id, false, false,
+		     0);
+
+	return true;
 }
 
 /* _validate_job_desc - validate that a job descriptor for job submit or

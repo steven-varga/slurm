@@ -4464,6 +4464,14 @@ static void *_wait_boot(void *arg)
 		      __func__, wait_boot_arg->job_id);
 	} else {
 		if (job_timeout) {
+			/*
+			 * remove configuring in case wait_kill is set
+			 *
+			 * or the nodes need to have POWERING_UP removed or the
+			 * job will never get cancelled because job_time_limit()
+			 * will never see that test_job_nodes_ready() is ready.
+			 */
+			job_ptr->job_state &= ~JOB_CONFIGURING;
 			job_complete(job_ptr->job_id, slurm_conf.slurm_user_id,
 			             true, true, NO_VAL);
 		}
@@ -4556,7 +4564,8 @@ extern void prolog_running_decr(job_record_t *job_ptr)
 	if (job_ptr->job_state & JOB_REQUEUE_FED)
 		return;
 
-	if (IS_JOB_CONFIGURING(job_ptr) && test_job_nodes_ready(job_ptr)) {
+	if (IS_JOB_CONFIGURING(job_ptr) && test_job_nodes_ready(job_ptr) &&
+	    !job_wait_kill(job_ptr)) {
 		info("%s: Configuration for %pJ is complete",
 		     __func__, job_ptr);
 		job_config_fini(job_ptr);

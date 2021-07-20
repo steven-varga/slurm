@@ -1107,6 +1107,10 @@ static bitstr_t *_pick_step_nodes(job_record_t *job_ptr,
 			}
 		}
 		if (IS_JOB_CONFIGURING(job_ptr)) {
+			if (job_wait_kill(job_ptr)) {
+				*return_code = ESLURM_JOB_KILL_CONFIGURING_WAIT;
+				goto cleanup;
+			}
 			info("%s: Configuration for %pJ is complete",
 			      __func__, job_ptr);
 			job_config_fini(job_ptr);
