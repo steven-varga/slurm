@@ -4463,8 +4463,10 @@ static void *_wait_boot(void *arg)
 		error("%s: missing JobId=%u after node_write_lock acquired",
 		      __func__, wait_boot_arg->job_id);
 	} else {
-		if (job_timeout)
-			(void) job_requeue(getuid(), job_ptr->job_id, NULL, false, 0);
+		if (job_timeout) {
+			job_complete(job_ptr->job_id, slurm_conf.slurm_user_id,
+			             true, true, NO_VAL);
+		}
 		prolog_running_decr(job_ptr);
 	}
 	unlock_slurmctld(node_write_lock);
