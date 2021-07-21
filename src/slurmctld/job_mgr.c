@@ -4157,7 +4157,8 @@ extern int kill_running_job_by_node_name(char *node_name)
 					&job_ptr->gres_used);
 				job_post_resize_acctg(job_ptr);
 			} else if (job_ptr->batch_flag && job_ptr->details &&
-				   job_ptr->details->requeue) {
+				   job_ptr->details->requeue &&
+				   !IS_JOB_WAIT_KILL(job_ptr)) {
 				char requeue_msg[128];
 
 				srun_node_fail(job_ptr, node_name);

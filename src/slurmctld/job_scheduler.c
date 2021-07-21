@@ -4473,7 +4473,7 @@ static void *_wait_boot(void *arg)
 			 */
 			job_ptr->job_state &= ~JOB_CONFIGURING;
 			job_complete(job_ptr->job_id, slurm_conf.slurm_user_id,
-			             true, true, NO_VAL);
+				     !IS_JOB_WAIT_KILL(job_ptr), true, NO_VAL);
 		}
 		prolog_running_decr(job_ptr);
 	}

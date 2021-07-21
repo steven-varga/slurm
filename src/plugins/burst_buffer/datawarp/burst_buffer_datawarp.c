@@ -4342,7 +4342,10 @@ static void *_start_pre_run(void *x)
 	slurm_mutex_unlock(&bb_state.bb_mutex);
 	if (run_kill_job) {
 		/* bb_mutex must be unlocked before calling this */
-		_kill_job(job_ptr, hold_job);
+		if (IS_JOB_WAIT_KILL(job_ptr))
+			job_wait_kill(job_ptr);
+		else
+			_kill_job(job_ptr, hold_job);
 	}
 	unlock_slurmctld(job_write_lock);
 
