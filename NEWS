@@ -37,6 +37,8 @@ documents those changes that are of interest to users and administrators.
  -- If we made are running an interactive session we need to force track_steps.
  -- Disable OPOST flag when using --pty to avoid issues with Emac.
  -- Fix error codes in cgroup/v1.
+ -- Don't destroy the memory step outside fini, which leads to a double destroy
+    causing an error message.
 
 * Changes in Slurm 21.08.0rc1
 =============================
