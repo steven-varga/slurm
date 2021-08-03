@@ -904,7 +904,7 @@ extern int task_cgroup_cpuset_fini(void)
 
 extern int task_cgroup_cpuset_create(stepd_step_rec_t *job)
 {
-	cgroup_limits_t limits, *root_limits = NULL;
+	cgroup_limits_t limits, *root_limits = NULL, *step_limits = NULL;
 	char *job_alloc_cpus = NULL;
 	char *step_alloc_cpus = NULL;
 	int rc = SLURM_SUCCESS;
@@ -943,7 +943,11 @@ extern int task_cgroup_cpuset_create(stepd_step_rec_t *job)
 	memset(&limits, 0, sizeof(limits));
 	limits.allow_mems = root_limits->allow_mems;
 
-	/* User constrain */
+	/*
+	 * User constrain: job_alloc_cpus is normally a subset of
+	 * root_limits->allow_cores, set both of them here anyway, cgroup will
+	 * compact the string on its own.
+	 */
 	limits.allow_cores = xstrdup_printf(
 		"%s,%s", job_alloc_cpus, root_limits->allow_cores);
 	rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_USER, &limits);
@@ -951,18 +955,41 @@ extern int task_cgroup_cpuset_create(stepd_step_rec_t *job)
 	if (rc != SLURM_SUCCESS)
 		goto endit;
 
-	/* Job constrain */
-	limits.allow_cores = job_alloc_cpus;
-	rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_JOB, &limits);
-	if (rc != SLURM_SUCCESS)
-		goto endit;
+	/*
+	 * We need to determine the order on which to apply these constrains.
+	 * There are some OS that do propagate the cpuset.mems and cpuset.cpus
+	 * to child cgroups when doing mkdir, but there are other OSes that do
+	 * the opposite and just leave an empty file.
+	 */
+	step_limits = cgroup_g_constrain_get(CG_CPUS, CG_LEVEL_STEP);
 
-	/* Step constrain */
-	limits.allow_cores = step_alloc_cpus;
-	limits.step = job;
-	rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_STEP, &limits);
-	if (rc != SLURM_SUCCESS)
-		goto endit;
+	if (!xstrcmp(step_limits->allow_cores, "")) {
+		/* Job constrain */
+		limits.allow_cores = job_alloc_cpus;
+		rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_JOB, &limits);
+		if (rc != SLURM_SUCCESS)
+			goto endit;
+
+		/* Step constrain */
+		limits.allow_cores = step_alloc_cpus;
+		limits.step = job;
+		rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_STEP, &limits);
+		if (rc != SLURM_SUCCESS)
+			goto endit;
+	} else {
+		/* Step constrain */
+		limits.allow_cores = step_alloc_cpus;
+		limits.step = job;
+		rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_STEP, &limits);
+		if (rc != SLURM_SUCCESS)
+			goto endit;
+
+		/* Job constrain */
+		limits.allow_cores = job_alloc_cpus;
+		rc = cgroup_g_constrain_set(CG_CPUS, CG_LEVEL_JOB, &limits);
+		if (rc != SLURM_SUCCESS)
+			goto endit;
+	}
 
 	/* validate the requested cpu frequency and set it */
 	cpu_freq_cgroup_validate(job, step_alloc_cpus);
@@ -971,6 +998,7 @@ endit:
 	xfree(job_alloc_cpus);
 	xfree(step_alloc_cpus);
 	cgroup_free_limits(root_limits);
+	cgroup_free_limits(step_limits);
 	return rc;
 }
 
