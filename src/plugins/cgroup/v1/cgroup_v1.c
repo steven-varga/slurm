@@ -167,6 +167,9 @@ static int _cpuset_create(stepd_step_rec_t *job)
 			common_cgroup_destroy(&slurm_cg);
 			return SLURM_ERROR;
 		}
+		/* This is needed for child cgroups to inherit this setting. */
+		common_cgroup_set_param(&slurm_cg,
+					"cgroup.clone_children", "1");
 	}
 	if (job == NULL) {
 		/* This is a request to create a cpuset for slurmd daemon */
