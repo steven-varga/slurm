@@ -103,7 +103,7 @@ proc test_fed_job_id { cname cid} {
 
 	log_debug "Fed JobID:$job_id Local JobID:$local_id Cluster ID:$clust_id"
 	if {!$rc && ($clust_id != $cid)} {
-		log_error "Jobid($job_id) from $cname didn't give correct partition id ($part_id != $cid)"
+		log_error "Jobid($job_id) from $cname didn't give correct cluster id ($clust_id != $cid)"
 		incr rc
 	}
 
