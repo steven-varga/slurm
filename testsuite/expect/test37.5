@@ -374,7 +374,13 @@ if {$requeue_exithold_num ne "(null)"} {
 	log_warn "Configure RequeueExitHold=# to test."
 }
 
-
+# Use partition max time limit
+set max_time [get_partition_maximum_time_limit ""]
+if { $max_time == -1 } {
+	set max_time "infinite"
+} else {
+	set max_time [expr $max_time / 60]
+}
 
 # get number of nodes per cluster
 set node_count [llength [get_nodes_by_state idle,alloc,comp]]
@@ -391,7 +397,7 @@ log_info "Test requeue of a running job on origin cluster"
 log_info "################################################################"
 
 # Submit jobs that fill up fed2,fed3
-spawn $sbatch -N$node_count --exclusive -o /dev/null -e /dev/null -t999999 --requeue -M$fedc2 $long_script
+spawn $sbatch -N$node_count --exclusive -o /dev/null -e /dev/null -t$max_time --requeue -M$fedc2 $long_script
 expect {
 	-re "Submitted batch job ($number)" {
 		set long_running_job_id $expect_out(1,string)
@@ -409,7 +415,7 @@ if {[string compare $run_cluster ""] == 0} {
 	fail "Didn't find cluster with running job"
 }
 
-spawn $sbatch -N$node_count --exclusive -o /dev/null -e /dev/null -t999999 --requeue -M$fedc3 $long_script
+spawn $sbatch -N$node_count --exclusive -o /dev/null -e /dev/null -t$max_time --requeue -M$fedc3 $long_script
 expect {
 	-re "Submitted batch job ($number)" {
 		set long_running_job_id2 $expect_out(1,string)
@@ -603,7 +609,7 @@ log_info "Test requeue of running job on sibling cluster"
 log_info "################################################################"
 
 # Submit job that consumes all nodes on first cluster
-spawn $sbatch -N$node_count --exclusive -o /dev/null -e /dev/null -t999999 --requeue -M$origin_cluster $long_script
+spawn $sbatch -N$node_count --exclusive -o /dev/null -e /dev/null -t$max_time --requeue -M$origin_cluster $long_script
 expect {
 	-re "Submitted batch job ($number)" {
 		set long_running_job_id $expect_out(1,string)
