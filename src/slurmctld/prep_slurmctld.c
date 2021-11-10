@@ -125,29 +125,33 @@ extern void prep_epilog_slurmctld_callback(int rc, uint32_t job_id)
 	/* all async prologs have completed, continue on now */
 	job_ptr->epilog_running = false;
 
-	if (job_ptr->bit_flags & NOT_LAUNCHED) {
-		/*
-		 * Job was configuring when it was cancelled and epilog wasn't
-		 * run on the nodes, so cleanup the nodes after EpilogSlurmctld
-		 * is done.
-		 */
-		job_ptr->bit_flags &= ~NOT_LAUNCHED;
-		if (job_ptr->node_bitmap_cg) {
-			int i_first, i_last;
-			i_first = bit_ffs(job_ptr->node_bitmap_cg);
-			if (i_first >= 0)
-				i_last = bit_fls(job_ptr->node_bitmap_cg);
-			else
-				i_last = i_first - 1;
-			for (int i = i_first; i <= i_last; i++) {
-				if (!bit_test(job_ptr->node_bitmap_cg, i))
-					continue;
-				job_epilog_complete(
-					job_ptr->job_id,
-					node_record_table_ptr[i].name, 0);
+	if (job_ptr->node_bitmap_cg) {
+		node_record_t *node_ptr;
+		int i_first, i_last;
+		i_first = bit_ffs(job_ptr->node_bitmap_cg);
+		if (i_first >= 0)
+			i_last = bit_fls(job_ptr->node_bitmap_cg);
+		else
+			i_last = i_first - 1;
+		for (int i = i_first; i <= i_last; i++) {
+			if (!bit_test(job_ptr->node_bitmap_cg, i))
+				continue;
+			/*
+			 * Job was configuring, down or powering up when it was
+			 * cancelled and epilog wasn't run on the nodes, so
+			 * cleanup the nodes after EpilogSlurmctld is done.
+			 */
+			node_ptr = &node_record_table_ptr[i];
+			if ((job_ptr->bit_flags & NOT_LAUNCHED) ||
+			    IS_NODE_DOWN(node_ptr) ||
+			    IS_NODE_POWERED_DOWN(node_ptr) ||
+			    IS_NODE_POWERING_UP(node_ptr)) {
+				job_epilog_complete(job_ptr->job_id,
+						    node_ptr->name, 0);
 			}
 		}
 	}
+	job_ptr->bit_flags &= ~NOT_LAUNCHED;
 
 	/*
 	 * Clear the JOB_COMPLETING flag only if the node count is 0
