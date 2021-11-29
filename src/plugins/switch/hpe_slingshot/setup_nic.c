@@ -115,9 +115,12 @@ static bool _get_reserved_limits(int dev, slingshot_limits_set_t *limits)
 	int svc, rc;
 	struct cxil_svc_list *list = NULL;
 
+	if (!cxi_devs[dev])
+		return true;
 	if ((rc = cxil_get_svc_list(cxi_devs[dev], &list))) {
-		error("Could not get service list for CXI device %d:"
-			" %d %d", dev, rc, errno);
+		error("Could not get service list for CXI device[%d] dev_id=%d (%s): %d",
+			dev, cxi_devs[dev]->info.dev_id,
+			cxi_devs[dev]->info.device_name, rc);
 		return false;
 	}
 	for (svc = 0; svc < list->count; svc++) {
@@ -170,8 +173,9 @@ static bool _create_cxi_devs(void)
 	for (dev = 0; dev < cxi_ndevs; dev++) {
 		struct cxil_devinfo *info = &list->info[dev];
 		if ((rc = cxil_open_device_p(info->dev_id, &cxi_devs[dev]))) {
-			error("Could not open CXI device %d: %d %d",
-			      dev, rc, errno);
+			error("Could not open CXI device[%d] dev_id=%d (%s): %d",
+			      dev, info->dev_id, info->device_name, rc);
+			cxi_devs[dev] = NULL;
 			continue;
 		}
 		// Only done in debug mode
@@ -323,6 +327,21 @@ out:
 }
 
 /*
+ * Return a pointer to the cxi_devs[] slot with the requested device name;
+ * return NULL if not found
+ */
+static struct cxil_dev *_device_name_to_dev(const char *devname)
+{
+	for (int dev = 0; dev < cxi_ndevs; dev++) {
+		if (!cxi_devs[dev])
+			continue;
+		if (!strcmp(devname, cxi_devs[dev]->info.device_name))
+			return cxi_devs[dev];
+	}
+	return NULL;
+}
+
+/*
  * In the daemon, when the shepherd for an App terminates, free any CXI
  * Services we have allocated for it
  */
@@ -335,17 +354,27 @@ extern bool slingshot_destroy_services(slingshot_jobinfo_t *job)
 
 	for (int prof = 0; prof < job->num_profiles; prof++) {
 		int svc_id = job->profiles[prof].svc_id;
+		const char *devname = job->profiles[prof].device_name;
 
 		// Service ID 0 means not a Service
 		if (svc_id <= 0)
 			continue;
 
-		debug("Destroying CXI SVC ID %d on NIC %s",
-			svc_id, cxi_devs[prof]->info.device_name);
+		// Find device associated with profile
+		struct cxil_dev *dev = _device_name_to_dev(devname);
+		if (!dev) {
+			error("Cannot find device for CXI Service ID %d (%s)",
+				svc_id, devname);
+			continue;
+		}
 
-		if (cxil_destroy_svc_p(cxi_devs[prof], svc_id)) {
-			error("Failed to destroy CXI Service ID %d: %d",
-			      svc_id, errno);
+		debug("Destroying CXI SVC ID %d on NIC %s",
+			svc_id, devname);
+
+		int rc = cxil_destroy_svc_p(dev, svc_id);
+		if (rc) {
+			error("Failed to destroy CXI Service ID %d (%s): %d",
+			      svc_id, devname, rc);
 			return false;
 		}
 	}
@@ -432,7 +461,7 @@ static void _alloc_fail_info(const struct cxil_dev *dev,
 extern bool slingshot_create_services(
 	slingshot_jobinfo_t *job, uint32_t uid, uint16_t step_cpus)
 {
-	int prof;
+	int prof, devn;
 	struct cxi_svc_desc desc;
 	struct cxil_dev *dev;
 	struct cxi_svc_fail_info failinfo;
@@ -451,12 +480,20 @@ extern bool slingshot_create_services(
 		return true;
 	}
 
-	job->num_profiles = cxi_ndevs;
+	// Figure out number of working NICs = services to create
+	job->num_profiles = 0;
+	for (int i = 0; i < cxi_ndevs; i++) {
+		if (cxi_devs[i])
+			job->num_profiles++;
+	}
 	job->profiles = xcalloc(job->num_profiles, sizeof(*job->profiles));
 
 	// Create a Service for each NIC
-	for (prof = 0; prof < cxi_ndevs; prof++) {
-		dev = cxi_devs[prof];
+	prof = 0;
+	for (devn = 0; devn < cxi_ndevs; devn++) {
+		dev = cxi_devs[devn];
+		if (!dev)
+			continue;
 
 		// Set what we'll need in the CXI Service
 		_create_cxi_descriptor(&desc, &dev->info, job, uid, step_cpus);
@@ -475,11 +512,12 @@ extern bool slingshot_create_services(
 		snprintf(profile->device_name, sizeof(profile->device_name),
 			"%s", dev->info.device_name);
 
-		debug("Creating CXI profile[%d] on NIC %s:"
+		debug("Creating CXI profile[%d] on NIC %d (%s):"
 			" SVC ID %u vnis=%hu %hu %hu %hu tcs=%u",
-			prof, profile->device_name, profile->svc_id,
+			prof, devn, profile->device_name, profile->svc_id,
 			profile->vnis[0], profile->vnis[1], profile->vnis[2],
 			profile->vnis[3], profile->tcs);
+		prof++;
 	}
 	return true;
 
