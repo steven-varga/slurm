@@ -508,6 +508,7 @@ extern bool slingshot_create_services(
 		profile->svc_id = svc_id;
 		for (int v = 0; v < job->num_vnis; v++)
 			profile->vnis[v] = job->vnis[v];
+		profile->vnis_used = job->num_vnis;
 		profile->tcs = job->tcs;
 		snprintf(profile->device_name, sizeof(profile->device_name),
 			"%s", dev->info.device_name);

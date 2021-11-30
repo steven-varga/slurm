@@ -648,25 +648,25 @@ int switch_p_job_attach(switch_jobinfo_t *jobinfo, char ***env,
 	int pidx, vidx;
 	char *svc_ids = NULL, *vnis = NULL, *devices = NULL, *tcss = NULL;
 
+	if (job->num_profiles == 0)
+		return SLURM_SUCCESS;
+
+	// svc_ids, devices, traffic classes are per-device, comma-separated
 	for (pidx = 0; pidx < job->num_profiles; pidx++) {
 		char *sep = pidx ? "," : "";
 		pals_comm_profile_t *profile = &job->profiles[pidx];
 		xstrfmtcat(svc_ids, "%s%u", sep, profile->svc_id);
-		char *vni = NULL;
-		for (vidx = 0; vidx < SLINGSHOT_VNIS; vidx++) {
-			if (profile->vnis[vidx])
-				xstrfmtcat(vni, "%s%hu",
-					vidx ? ":" : "", profile->vnis[vidx]);
-		}
-		xstrfmtcat(vnis, "%s%s", sep, vni);
-		xfree(vni);
 		xstrfmtcat(devices, "%s%s", sep, profile->device_name);
 		xstrfmtcat(tcss, "%s%#x", sep, profile->tcs);
-		log_flag(SWITCH,
-			"profile[%d]: SLINGSHOT_SVC_IDS=%s SLINGSHOT_VNIS=%s"
-			" SLINGSHOT_DEVICES=%s SLINGSHOT_TCS=%s",
-			pidx, svc_ids, vnis, devices, tcss);
 	}
+
+	// vnis are global (all services share VNIs), comma-separated
+	for (vidx = 0; vidx < job->num_vnis; vidx++)
+		xstrfmtcat(vnis, "%s%hu", vidx ? "," : "", job->vnis[vidx]);
+
+	log_flag(SWITCH, "SLINGSHOT_SVC_IDS=%s SLINGSHOT_VNIS=%s"
+			" SLINGSHOT_DEVICES=%s SLINGSHOT_TCS=%s",
+			svc_ids, vnis, devices, tcss);
 
 	env_array_overwrite(env, SLINGSHOT_SVC_IDS_ENV, svc_ids);
 	env_array_overwrite(env, SLINGSHOT_VNIS_ENV, vnis);
