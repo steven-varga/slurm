@@ -553,7 +553,9 @@ int switch_p_job_preinit(stepd_step_rec_t *job)
 	slingshot_jobinfo_t *jobinfo = job->switch_job->data;
 	xassert(jobinfo);
 	int step_cpus = job->node_tasks * job->cpus_per_task;
-	return slingshot_create_services(jobinfo, job->uid, step_cpus);
+	if (!slingshot_create_services(jobinfo, job->uid, step_cpus))
+		return SLURM_ERROR;
+	return SLURM_SUCCESS;
 }
 
 /*
@@ -631,7 +633,9 @@ int switch_p_job_postfini(stepd_step_rec_t *job)
 	slingshot_jobinfo_t *jobinfo;
 	jobinfo = (slingshot_jobinfo_t *)job->switch_job->data;
 	xassert(jobinfo);
-	return slingshot_destroy_services(jobinfo);
+	if (!slingshot_destroy_services(jobinfo))
+		return SLURM_ERROR;
+	return SLURM_SUCCESS;
 }
 
 /*
