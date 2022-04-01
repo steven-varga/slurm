@@ -1680,15 +1680,16 @@ int update_node ( update_node_msg_t * update_node_msg )
 				if ((node_ptr->run_job_cnt  == 0) &&
 				    (node_ptr->comp_job_cnt == 0)) {
 					trigger_node_drained(node_ptr);
-					clusteracct_storage_g_node_down(
-						acct_db_conn,
-						node_ptr, now, NULL,
-						node_ptr->reason_uid);
 				}
+				// vargaconsulting: signal node_down even if there are jobs running
+				// and let the accounting plugin sort out the details
+				clusteracct_storage_g_node_down(acct_db_conn, node_ptr, now, NULL, node_ptr->reason_uid);
 				if ((new_state == NODE_STATE_FAIL) &&
 				    (nonstop_ops.node_fail))
 					(nonstop_ops.node_fail)(NULL, node_ptr);
 			} else if (state_val & NODE_STATE_POWER_DOWN) {
+				clusteracct_storage_g_node_down(acct_db_conn, node_ptr, now, NULL, node_ptr->reason_uid);
+
 				if ((state_val & NODE_STATE_POWER_UP) &&
 				    (IS_NODE_POWERING_UP(node_ptr))) {
 					/* Clear any reboot op in progress */
